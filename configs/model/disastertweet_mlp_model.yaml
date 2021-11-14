@@ -1,0 +1,8 @@
+_target_: src.models.disastertweet_mlp_model.DisasterTweetsClassifierMLP
+
+num_classes: 2
+dropout_p: 0.7
+pretrained_embeddings:
+max_seq_length: 
+learning_rate: 0.001 
+weight_decay: 1e-5

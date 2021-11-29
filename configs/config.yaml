@@ -4,8 +4,8 @@
 defaults:
   - _self_
   - trainer: default.yaml
-  - model: disastertweet_mlp_model.yaml
-  - datamodule: disastertweet_datamodule.yaml
+  - model: agnews_mlp_model.yaml
+  - datamodule: agnews_datamodule.yaml
   - callbacks: default.yaml
   - logger: null # set logger here or use command line (e.g. `python run.py logger=wandb`)
 

@@ -16,21 +16,45 @@ import pytorch_lightning as pl
 
 
 
-class DisasterTweetsClassifierMLP(pl.LightningModule):
+class AGNewsClassifierMLP(pl.LightningModule):
 
-    def __init__(self, num_classes, dropout_p, pretrained_embeddings,
-                 max_seq_length, learning_rate, weight_decay):
+    def __init__(self, 
+                num_classes,
+                embedding_dim,
+                num_embeddings, 
+                dropout_p, 
+                # pretrained_embeddings,
+                max_seq_length, 
+                learning_rate, 
+                weight_decay,
+                padding_idx=0):
         super().__init__()
 
-        self.save_hyperparameters('num_classes', 'dropout_p', 'learning_rate', 'weight_decay')
+        self.save_hyperparameters()
 
-        embedding_dim = pretrained_embeddings.size(1)
-        num_embeddings = pretrained_embeddings.size(0)
+        self.num_classes = num_classes
+        self.embedding_dim = embedding_dim
+        self.num_embeddings = num_embeddings
+        self.dropout_p = dropout_p
+        # self.pretrained_embeddings = pretrained_embeddings
+        self.max_seq_length = max_seq_length
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
+        self.padding_idx = padding_idx
 
-        self.emb = torch.nn.Embedding(embedding_dim=embedding_dim,
-                                      num_embeddings=num_embeddings,
-                                      padding_idx=0,
-                                      _weight=pretrained_embeddings)
+        # embedding_dim = pretrained_embeddings.size(1)
+        # num_embeddings = pretrained_embeddings.size(0)
+
+
+
+        self.emb = torch.nn.Embedding(
+                                      num_embeddings=self.num_embeddings + 1,
+                                      embedding_dim=self.embedding_dim,
+                                    #   embedding_dim=embedding_dim,
+                                    #   num_embeddings=num_embeddings,
+                                      padding_idx=self.padding_idx,
+                                      #_weight=pretrained_embeddings
+                                      )
         self.fc = torch.nn.Sequential(
             torch.nn.Linear(in_features=embedding_dim * max_seq_length, out_features=128),
             torch.nn.BatchNorm1d(num_features=128),
@@ -52,6 +76,9 @@ class DisasterTweetsClassifierMLP(pl.LightningModule):
         )
         self.loss = torch.nn.CrossEntropyLoss(reduction='none')
 
+
+
+
     def forward(self, batch):
         x_embedded = self.emb(batch).view(batch.size(0), -1)
         output = self.fc(x_embedded)
@@ -59,21 +86,29 @@ class DisasterTweetsClassifierMLP(pl.LightningModule):
         return output
 
     def training_step(self, batch, batch_idx):
-        y_pred = self(batch['x_data'])
-        loss = self.loss(y_pred, batch['y_target']).mean()
+        x, y = batch
+        y_pred = self(x)
+        loss = self.loss(y_pred, y).mean()
+        self.log('loss', loss, prog_bar=True, on_step=False,
+                 on_epoch=True)
+        if batch_idx == 1874:
+            print("here")
         return {'loss': loss, 'log': {'train_loss': loss}}
 
     def validation_step(self, batch, batch_idx):
-        y_pred = self(batch['x_data'])
-        loss = self.loss(y_pred, batch['y_target'])
-        acc = (y_pred.argmax(-1) == batch['y_target']).float()
-        return {'loss': loss, 'acc': acc}
+        x, y = batch
+        y_pred = self(x)
+        loss = self.loss(y_pred, y)
+        acc = (y_pred.argmax(-1) == y).float()
+        self.log('val/acc', acc, prog_bar=True, on_step=True,
+                 on_epoch=True)
+        return {'val/loss': loss, 'val/acc': acc}
 
-    def validation_epoch_end(self, outputs):
-        loss = torch.cat([o['loss'] for o in outputs], 0).mean()
-        acc = torch.cat([o['acc'] for o in outputs], 0).mean()
-        out = {'val_loss': loss, 'val_acc': acc}
-        return {**out, 'log': out}
+    # def validation_epoch_end(self, outputs):
+    #     loss = torch.cat([o['val/loss'] for o in outputs], 0).mean()
+    #     acc = torch.cat([o['val/acc'] for o in outputs], 0).mean()
+    #     out = {'val/loss': loss, 'val/acc': acc}
+    #     return {**out, 'log': out}
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(),
@@ -81,25 +116,17 @@ class DisasterTweetsClassifierMLP(pl.LightningModule):
                                 weight_decay=self.hparams.weight_decay)
 
     def test_step(self, batch, batch_idx):
-        y_pred = self(batch['x_data'])
-        loss = self.loss(y_pred, batch['y_target'])
-        acc = (y_pred.argmax(-1) == batch['y_target']).float()
-        return {'loss': loss, 'acc': acc}
+        x, y = batch
+        y_pred = self(x)
+        loss = self.loss(y_pred, y)
+        acc = (y_pred.argmax(-1) == y).float()
+        return {'test/loss': loss, 'test/acc': acc}
 
     def test_epoch_end(self, outputs):
         loss = torch.cat([o['loss'] for o in outputs], 0).mean()
         acc = torch.cat([o['acc'] for o in outputs], 0).mean()
-        out = {'test_loss': loss, 'test_acc': acc}
+        out = {'test/loss': loss, 'test/acc': acc}
         return {**out, 'log': out}
-
-    @staticmethod
-    def add_model_specific_args(parent_parser):
-        parser = ArgumentParser(parents=[parent_parser], add_help=False)
-        parser.add_argument('--dropout_p', default=0.7, type=float)
-        parser.add_argument('--learning_rate', default=1e-3, type=float)
-        parser.add_argument('--weight_decay', default=1e-5, type=float)
-        return parser
-
 
 def predict_target(text, classifier, vectorizer, max_seq_length):
     text_vector, _ = vectorizer.vectorize(text, max_seq_length)
@@ -126,3 +153,9 @@ def predict_on_dataset(classifier, ds):
     roc_auc = roc_auc_score(df.target, df.probability)
     print("Result metrics - \n Accuracy={} \n F1-Score={} \n ROC-AUC={}".format(acc, f1, roc_auc))
     return df
+
+
+if __name__ == "__main__":
+    m = AGNewsClassifierMLP(4, 95811, 20, 0.70, 20, 0.001, 1e-5, 0)
+    d = torch.randint(0, 95811, (1, 20))
+    m(d)

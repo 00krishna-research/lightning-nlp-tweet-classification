@@ -1,0 +1,10 @@
+_target_: src.models.agnews_mlp_model.AGNewsClassifierMLP
+
+num_classes: 4
+embedding_dim: 20
+num_embeddings: 95811
+dropout_p: 0.7
+max_seq_length: 100
+learning_rate: 0.001 
+weight_decay: 1e-5
+padding_idx: 0

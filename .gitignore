@@ -146,3 +146,4 @@ wandb/
 .env
 .autoenv
 .data/
+.vector_cache/
